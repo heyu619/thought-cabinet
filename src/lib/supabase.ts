@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://ywhhayauksioynsnphln.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3aGhheWF1a3Npb3luc25waGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODgxNTcsImV4cCI6MjA5NDQ2NDE1N30.E6CNM7bMVck2RZmuAbquwjDv7l3-ctigwzemhsYv1Qw'
+// ✅ 正确写法：从环境变量读取
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
