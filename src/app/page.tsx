@@ -38,31 +38,19 @@ export default function HomePage() {
   const [showContent, setShowContent] = useState(false)
   const [userQuestion, setUserQuestion] = useState('')
 
-  // 页面加载时输出调试信息
-  console.log('HomePage loaded, user:', user);
-  console.log('router:', router);
+  const validateQuestion = (question: string): boolean => {
+    const cleaned = question.trim().replace(/\s+/g, ' ')
+    return cleaned.length >= 3 && !cleaned.match(/^[？?！!。.，,、\s]+$/)
+  }
 
   const startDecision = () => {
-    console.log('startDecision called, userQuestion:', userQuestion);
-    if (userQuestion.trim()) {
-      console.log('userQuestion is not empty');
-      // 清理输入，移除换行符和多余空格
-      const cleanedQuestion = userQuestion.trim().replace(/\s+/g, ' ');
-      console.log('cleanedQuestion:', cleanedQuestion);
-      // 验证问题是否有效（至少3个字符，不是只有标点符号）
-      const isValid = cleanedQuestion.length >= 3 && !cleanedQuestion.match(/^[？?！!。.，,、\s]+$/);
-      console.log('isValid:', isValid);
-      if (isValid) {
-        console.log('saving to localStorage and navigating');
-        // 使用 localStorage 传递问题，避免 URL 编码问题
-        localStorage.setItem('decisionQuestion', cleanedQuestion);
-        router.push('/decision');
-      } else {
-        console.log('invalid question');
-        alert('请输入有效的问题（至少3个字符，不能只有标点符号）');
-      }
+    if (!userQuestion.trim()) return
+
+    if (validateQuestion(userQuestion)) {
+      localStorage.setItem('decisionQuestion', userQuestion.trim().replace(/\s+/g, ' '))
+      router.push('/decision')
     } else {
-      console.log('userQuestion is empty');
+      alert('请输入有效的问题（至少3个字符，不能只有标点符号）')
     }
   }
 

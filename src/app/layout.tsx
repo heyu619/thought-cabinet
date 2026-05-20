@@ -1,25 +1,6 @@
 import type { Metadata } from 'next'
-import { Special_Elite, IBM_Plex_Mono, Noto_Serif_SC } from 'next/font/google'
 import './globals.css'
 import ClientWrapper from '@/components/ClientWrapper'
-
-const specialElite = Special_Elite({
-  weight: '400',
-  subsets: ['latin'],
-  variable: '--font-special-elite',
-})
-
-const ibmPlexMono = IBM_Plex_Mono({
-  weight: ['400', '500', '600', '700'],
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-ibm-plex-mono',
-})
-
-const notoSerif = Noto_Serif_SC({
-  weight: ['400', '700'],
-  subsets: ['latin'],
-  variable: '--font-noto-serif',
-})
 
 export const metadata: Metadata = {
   title: 'Ribs Disco | Thought Cabinet',
@@ -32,8 +13,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="zh-CN">
-      <body className={`${specialElite.variable} ${ibmPlexMono.variable} ${notoSerif.variable}`}>
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="font-mono">
         <ClientWrapper>
           {children}
         </ClientWrapper>

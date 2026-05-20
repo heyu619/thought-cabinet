@@ -5,6 +5,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 
+const getErrorMessage = (error: string): string => {
+  if (error.includes('email not confirmed')) {
+    return '邮箱尚未验证，请检查邮箱并点击验证链接'
+  }
+  if (error.includes('invalid login credentials')) {
+    return '邮箱或密码错误，请检查后重试'
+  }
+  return error || '登录失败'
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { login } = useAuth()
@@ -29,14 +39,9 @@ export default function LoginPage() {
     if (result.success) {
       router.push('/')
     } else {
-      let errorMessage = result.error || '登录失败'
-      if (errorMessage.includes('email not confirmed')) {
-        errorMessage = '邮箱尚未验证，请检查邮箱并点击验证链接'
-      } else if (errorMessage.includes('invalid login credentials')) {
-        errorMessage = '邮箱或密码错误，请检查后重试'
-      }
-      setError(errorMessage)
+      setError(getErrorMessage(result.error || ''))
     }
+
     setIsLoading(false)
   }
 

@@ -1,9 +1,9 @@
-'use client';
+'use client'
 
-import { useState, useRef, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { 
   YINZI_PROMPT, 
   WUSHI_PROMPT, 
@@ -11,9 +11,8 @@ import {
   YUWANG_PROMPT, 
   LEZI_PROMPT, 
   DUOXIANG_PROMPT 
-} from '@/lib/prompts';
+} from '@/lib/prompts'
 
-// 角色名称映射
 const ROLE_NAMES: Record<string, string> = {
   yinzi: '引子入',
   wushi: '务实肋骨',
@@ -21,9 +20,8 @@ const ROLE_NAMES: Record<string, string> = {
   yuwang: '欲望鸡排',
   lezi: '乐子入',
   duoxiang: '多想鸭舌',
-};
+}
 
-// 角色颜色映射 - 仅用于区分名称颜色
 const ROLE_COLORS: Record<string, string> = {
   yinzi: 'text-yellow-400',
   wushi: 'text-red-400',
@@ -31,100 +29,77 @@ const ROLE_COLORS: Record<string, string> = {
   yuwang: 'text-pink-400',
   lezi: 'text-purple-400',
   duoxiang: 'text-teal-400',
-};
+}
 
-// 角色提示词映射
 const ROLE_PROMPTS: Record<string, string> = {
   wushi: WUSHI_PROMPT,
   lizhi: LIZHI_PROMPT,
   yuwang: YUWANG_PROMPT,
-};
+}
 
-type Message = {
-  role: string;
-  content: string;
-  isStreaming?: boolean;
-  tags?: string[];
-};
+interface Message {
+  role: string
+  content: string
+  isStreaming?: boolean
+  tags?: string[]
+}
 
-type Assignment = {
-  wushi: string;
-  lizhi: string;
-  yuwang: string;
-};
+interface Assignment {
+  wushi: string
+  lizhi: string
+  yuwang: string
+}
 
-// 创建一个包装组件来处理 useSearchParams
 function DecisionContent() {
-  const router = useRouter();
-  const { user, loading } = useAuth();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const router = useRouter()
+  const { user, loading } = useAuth()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   
-  // 会议状态 - 始终从 input 开始，避免服务端渲染冲突
-  const [phase, setPhase] = useState<'input' | 'intro' | 'speaking' | 'interrupt' | 'lezi' | 'final' | 'saved'>('input');
-  const [hasStartedFromUrl, setHasStartedFromUrl] = useState(false);
-  const [urlQuestion, setUrlQuestion] = useState<string | null>(null);
-  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
-  const [speakersCompleted, setSpeakersCompleted] = useState<string[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [options, setOptions] = useState<string[]>([]);
-  const [emotionTags, setEmotionTags] = useState<string[]>([]);
-  const [emotionDescription, setEmotionDescription] = useState<string>('');
-  const [userQuestion, setUserQuestion] = useState('');
-  const [assignments, setAssignments] = useState<Assignment | null>(null);
-  const [finalAdvice, setFinalAdvice] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [phase, setPhase] = useState<'input' | 'intro' | 'speaking' | 'interrupt' | 'lezi' | 'final' | 'saved'>('input')
+  const [hasStartedFromUrl, setHasStartedFromUrl] = useState(false)
+  const [urlQuestion, setUrlQuestion] = useState<string | null>(null)
+  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
+  const [speakersCompleted, setSpeakersCompleted] = useState<string[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
+  const [options, setOptions] = useState<string[]>([])
+  const [emotionTags, setEmotionTags] = useState<string[]>([])
+  const [emotionDescription, setEmotionDescription] = useState('')
+  const [userQuestion, setUserQuestion] = useState('')
+  const [assignments, setAssignments] = useState<Assignment | null>(null)
+  const [finalAdvice, setFinalAdvice] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  // 自动滚动到底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-  // 检查用户登录状态 - 只有在 loading 完成后才检查
   useEffect(() => {
-    if (loading) return; // 等待 AuthContext 初始化完成
+    if (loading) return
     if (!user) {
-      router.push('/login');
+      router.push('/login')
     }
-  }, [user, loading, router]);
+  }, [user, loading, router])
 
-  // 从localStorage获取问题并自动开始会议
   useEffect(() => {
-    // 使用 localStorage 获取问题
-    const question = localStorage.getItem('decisionQuestion');
-    
+    const question = localStorage.getItem('decisionQuestion')
     if (question) {
-      setUrlQuestion(question);
-      // 获取后立即清除，避免重复使用
-      localStorage.removeItem('decisionQuestion');
+      setUrlQuestion(question)
+      localStorage.removeItem('decisionQuestion')
     }
-  }, []);
+  }, [])
   
-  // 如果URL中有问题参数，自动填充并开始会议
   useEffect(() => {
-    console.log('自动开始会议检查:', { loading, user: !!user, urlQuestion, isLoading, hasStartedFromUrl });
+    if (loading || !user || !urlQuestion || isLoading || hasStartedFromUrl) return
     
-    // 等待用户认证完成和组件加载完成
-    if (loading || !user) {
-      console.log('等待认证完成:', { loading, user: !!user });
-      return;
-    }
+    setHasStartedFromUrl(true)
+    const question = decodeURIComponent(urlQuestion)
+    setUserQuestion(question)
+    setPhase('intro')
     
-    if (urlQuestion && !isLoading && !hasStartedFromUrl) {
-      console.log('满足条件，开始自动启动会议');
-      // 设置标志位防止重复触发
-      setHasStartedFromUrl(true);
-      // 设置问题并立即开始会议
-      const question = decodeURIComponent(urlQuestion);
-      // 先设置问题
-      setUserQuestion(question);
-      // 先切换到 intro 阶段显示加载状态
-      setPhase('intro');
-      // 使用 setTimeout 确保状态更新完成后再开始
-      setTimeout(() => {
-        startMeetingWithQuestion(question);
-      }, 300);
-    }
-  }, [urlQuestion, isLoading, hasStartedFromUrl, loading, user]);
+    setTimeout(() => {
+      startMeetingWithQuestion(question)
+    }, 300)
+  }, [urlQuestion, isLoading, hasStartedFromUrl, loading, user])
 
   // 流式调用DeepSeek API（用于非JSON格式输出，如引子入总结）
   const streamChat = async (
@@ -188,90 +163,84 @@ function DecisionContent() {
     userContent: string,
     onChunk: (chunk: string) => void
   ): Promise<void> => {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent }
-        ],
-        stream: true,
-      }),
-    });
+    // 使用非流式调用获取完整响应，然后逐字符输出
+    try {
+      const result = await fetchJson(systemPrompt, userContent);
+      const responseText = result.response || '';
+      
+      // 逐字符输出response内容
+      let index = 0;
+      const chars = responseText.split('');
+      
+      return new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+          if (index < chars.length) {
+            onChunk(chars[index]);
+            index++;
+          } else {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 30); // 打字速度
+      });
+    } catch (e) {
+      // 如果调用失败，使用流式调用作为备选
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent }
+          ],
+          stream: true,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error('API调用失败');
-    }
+      if (!response.ok) {
+        throw new Error('API调用失败');
+      }
 
-    const reader = response.body?.getReader();
-    if (!reader) return;
+      const reader = response.body?.getReader();
+      if (!reader) return;
 
-    const decoder = new TextDecoder();
-    let done = false;
-    let fullContent = '';
-    let inResponse = false;
-    let responseBuffer = '';
-    let tempBuffer = '';
+      const decoder = new TextDecoder();
+      let done = false;
+      let inResponse = false;
+      let tempBuffer = '';
 
-    while (!done) {
-      const { value, done: doneReading } = await reader.read();
-      done = doneReading;
-      if (value) {
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0].delta.content;
-              if (content) {
-                // 直接累积原始内容
-                tempBuffer += content;
-                
-                // 检查是否已经进入response字段的值部分
-                if (!inResponse) {
-                  // 查找response字段的开始
-                  const responseFieldIndex = tempBuffer.indexOf('"response"');
-                  if (responseFieldIndex !== -1) {
-                    // 找到response字段后，查找冒号和引号
-                    const colonIndex = tempBuffer.indexOf(':', responseFieldIndex);
-                    if (colonIndex !== -1) {
-                      const afterColon = tempBuffer.slice(colonIndex + 1).trim();
-                      if (afterColon.startsWith('"')) {
-                        // 已经进入response值的引号内
-                        inResponse = true;
-                        // 跳过引号，从实际内容开始
-                        const contentStart = colonIndex + 1 + afterColon.indexOf('"') + 1;
-                        responseBuffer = tempBuffer.slice(contentStart);
-                        // 处理转义字符
-                        responseBuffer = responseBuffer.replace(/\\("|\\)/g, '$1');
-                        onChunk(responseBuffer);
-                        tempBuffer = '';
-                      }
-                    }
-                  }
-                } else {
-                  // 已经在response字段内，直接处理内容
-                  let currentContent = content;
-                  // 检查是否遇到结束引号（非转义的）
-                  const endQuoteIndex = currentContent.search(/(?<!\\)"/);
-                  if (endQuoteIndex !== -1) {
-                    // 遇到结束引号，只取引号前的内容
-                    currentContent = currentContent.slice(0, endQuoteIndex);
-                    inResponse = false;
-                  }
-                  // 处理转义字符
-                  currentContent = currentContent.replace(/\\("|\\)/g, '$1');
-                  onChunk(currentContent);
-                }
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value);
+          tempBuffer += chunk;
+          
+          // 简单的JSON解析：查找response字段的值
+          if (!inResponse) {
+            const responseMatch = tempBuffer.match(/"response"\s*:\s*"([^"]*)/);
+            if (responseMatch) {
+              inResponse = true;
+              // 输出已匹配的内容
+              if (responseMatch[1]) {
+                onChunk(responseMatch[1]);
               }
-            } catch (e) {
-              // 忽略解析错误
+              // 清空已处理的部分
+              tempBuffer = tempBuffer.substring(responseMatch.index! + responseMatch[0].length);
+            }
+          } else {
+            // 在response字段内，查找结束引号
+            const endQuoteIndex = tempBuffer.indexOf('"');
+            if (endQuoteIndex !== -1) {
+              // 输出引号前的内容
+              onChunk(tempBuffer.substring(0, endQuoteIndex));
+              break; // 结束
+            } else {
+              // 还没遇到结束引号，输出所有内容
+              onChunk(tempBuffer);
+              tempBuffer = '';
             }
           }
         }
@@ -280,6 +249,57 @@ function DecisionContent() {
   };
 
   // 非流式调用（用于获取JSON数据）
+  const cleanJsonContent = (content: string): string => {
+    // 首先移除所有控制字符和特殊字符
+    let cleaned = content
+      // 移除所有控制字符（0-31, 127-159）
+      .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+      // 移除零宽字符
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      // 将全角空格替换为半角空格
+      .replace(/\u3000/g, ' ')
+      // 将中文引号替换为英文单引号（避免JSON解析问题）
+      .replace(/“|”/g, "'")
+      .replace(/‘|’/g, "'")
+      .trim();
+    
+    // 将字符串内部的英文双引号替换为单引号（避免JSON解析问题）
+    // 这是一种简单但有效的方法
+    let inString = false;
+    let escaped = false;
+    let result = '';
+    
+    for (let i = 0; i < cleaned.length; i++) {
+      const char = cleaned[i];
+      
+      if (escaped) {
+        result += char;
+        escaped = false;
+        continue;
+      }
+      
+      if (char === '\\') {
+        result += char;
+        escaped = true;
+      } else if (char === '"') {
+        if (inString) {
+          // 在字符串内部，将英文双引号替换为单引号
+          result += "'";
+        } else {
+          inString = true;
+          result += char;
+        }
+      } else if (char === '}') {
+        result += char;
+        inString = false;
+      } else {
+        result += char;
+      }
+    }
+    
+    return result;
+  };
+
   const fetchJson = async (systemPrompt: string, userContent: string): Promise<any> => {
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -306,28 +326,74 @@ function DecisionContent() {
       throw new Error('API返回内容为空');
     }
 
+    const rawContent = data.content;
+    
+    // 方法1：直接尝试JSON解析
     try {
-      return JSON.parse(data.content);
-    } catch (parseError) {
-      console.error('JSON解析失败，尝试从内容中提取JSON:', data.content);
-      
-      // 尝试从可能被包裹的内容中提取JSON
-      const jsonMatch = data.content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.response !== undefined) {
-            return parsed;
+      return JSON.parse(rawContent);
+    } catch {
+      // JSON解析失败，继续尝试其他方法
+    }
+
+    // 方法2：清理后尝试解析
+    const cleanedContent = cleanJsonContent(rawContent);
+    try {
+      return JSON.parse(cleanedContent);
+    } catch {
+      // 继续尝试
+    }
+
+    // 方法3：使用正则表达式提取response字段
+    try {
+      // 匹配 "response": "..." 或 "response": '...'
+      const responseMatch = rawContent.match(/"response"\s*:\s*["']([\s\S]*?)["'](?=\s*(,|}))/);
+      if (responseMatch) {
+        let responseText = responseMatch[1]
+          // 移除markdown格式
+          .replace(/\*\*/g, '')
+          // 移除转义字符
+          .replace(/\\n/g, '\n')
+          .replace(/\\"/g, '"')
+          .replace(/\\'/g, "'")
+          .trim();
+        
+        // 尝试提取options
+        const optionsMatch = rawContent.match(/"options"\s*:\s*\[([\s\S]*?)\]/);
+        let options = ['好的，我了解你的观点了，下一位'];
+        if (optionsMatch) {
+          const optionsText = optionsMatch[1];
+          const optionMatches = optionsText.match(/"([^"]*)"/g);
+          if (optionMatches) {
+            options = optionMatches.map((o: string) => o.replace(/^"|"$/g, ''));
           }
-        } catch (e) {
-          console.error('提取的JSON也无法解析:', e);
         }
+        
+        return {
+          response: responseText,
+          options
+        };
       }
+    } catch {
+      // 继续尝试
+    }
+
+    // 方法4：最宽松的方式 - 提取所有文本内容
+    try {
+      // 移除JSON结构，只保留文本内容
+      const textContent = rawContent
+        .replace(/["'\{\}\[\]:,]/g, ' ')
+        .replace(/\*\*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
       
-      // 如果所有尝试都失败，尝试清理内容并返回
-      const cleanContent = data.content.replace(/[\{\}"\\]/g, '').trim();
       return {
-        response: cleanContent || data.content,
+        response: textContent,
+        options: ['好的，我了解你的观点了，下一位']
+      };
+    } catch {
+      // 最后的保底
+      return {
+        response: rawContent.replace(/[\{\}\[\]"":,]/g, '').trim(),
         options: ['好的，我了解你的观点了，下一位']
       };
     }
@@ -589,44 +655,31 @@ function DecisionContent() {
     }
   };
 
-  // 开始会议
   const startMeeting = async () => {
-    console.log('startMeeting called, userQuestion:', userQuestion);
-    if (!userQuestion.trim()) {
-      console.log('userQuestion is empty');
-      return;
-    }
-    console.log('calling startMeetingWithQuestion');
-    await startMeetingWithQuestion(userQuestion);
-  };
+    if (!userQuestion.trim()) return
+    await startMeetingWithQuestion(userQuestion)
+  }
   
   const startMeetingWithQuestion = async (question: string) => {
-    if (!question.trim()) return;
+    if (!question.trim()) return
     
-    console.log('startMeetingWithQuestion called with:', question);
-    
-    setIsLoading(true);
-    setPhase('intro');
-    setMessages([]);
-    setSpeakersCompleted([]);
+    setIsLoading(true)
+    setPhase('intro')
+    setMessages([])
+    setSpeakersCompleted([])
     
     try {
-      // 引子入入场，拆解问题
-      const introResult = await fetchJson(YINZI_PROMPT, question);
-      console.log('引子入结果:', introResult);
-      setMessages([{ role: 'yinzi', content: introResult.summary }]);
-      setAssignments(introResult.assignments);
-      await generateEmotion();
-      
-      // 开始第一位发言者
-      await startSpeaker('wushi', introResult.assignments.wushi);
-    } catch (error) {
-      console.error('开始会议失败:', error);
-      alert('会议启动失败，请稍后重试');
+      const introResult = await fetchJson(YINZI_PROMPT, question)
+      setMessages([{ role: 'yinzi', content: introResult.summary }])
+      setAssignments(introResult.assignments)
+      await generateEmotion()
+      await startSpeaker('wushi', introResult.assignments.wushi)
+    } catch {
+      alert('会议启动失败，请稍后重试')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   // 开始某位发言者
   const startSpeaker = async (speaker: string, question: string) => {

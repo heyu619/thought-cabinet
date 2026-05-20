@@ -1,11 +1,7 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { AuthProvider } from '@/context/AuthContext'
-
-const Navigation = dynamic(() => import('./Navigation'), {
-  ssr: false,
-})
+import Navigation from './Navigation'
 
 export default function ClientWrapper({ children }: { children: React.ReactNode }) {
   return (

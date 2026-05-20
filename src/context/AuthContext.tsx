@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { User, AuthError } from '@supabase/supabase-js'
+import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
 interface AuthContextType {
@@ -19,66 +19,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        setUser(session?.user ?? null)
-      } catch {
-        setUser(null)
-      } finally {
-        setLoading(false)
-      }
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setUser(session?.user ?? null)
+      setLoading(false)
     }
 
-    initializeAuth()
+    fetchSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      if (data.user) {
-        return { success: true }
-      }
-
-      return { success: false, error: '登录失败' }
-    } catch (err) {
-      return { success: false, error: '网络错误，请稍后重试' }
-    }
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { success: false, error: error.message }
+    return { success: !!data.user }
   }
 
-  const register = async (email: string, password: string): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      })
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      const needsVerification = data.user?.email_confirmed_at === null
-      return { success: true, needsVerification }
-    } catch (err) {
-      return { success: false, error: '网络错误，请稍后重试' }
-    }
+  const register = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    })
+    if (error) return { success: false, error: error.message }
+    return { success: true, needsVerification: !data.user?.email_confirmed_at }
   }
 
   const logout = async () => {
@@ -94,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context

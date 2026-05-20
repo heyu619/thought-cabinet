@@ -67,6 +67,23 @@ const ROLE_NAMES: Record<string, string> = {
   user: '用户',
 }
 
+const formatDate = (isoString: string): string => {
+  const date = new Date(isoString)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
+  
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 export default function HistoryPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -81,7 +98,6 @@ export default function HistoryPage() {
     }
 
     const loadHistory = async () => {
-      // 先尝试从 Supabase 加载
       try {
         const { data, error } = await supabase
           .from('decisions')
@@ -89,13 +105,13 @@ export default function HistoryPage() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
         
-        if (!error && data && data.length > 0) {
+        if (!error && data?.length) {
           const converted = data.map((item: DatabaseEntry) => ({
             id: item.id,
             question: item.title,
             thoughts: [],
             winner: '未知',
-            date: item.id, // 使用 id 作为临时日期
+            date: item.id,
             emotionTags: Array.isArray(item.emotion_tags) ? item.emotion_tags : [],
             emotionDescription: '',
             dialogHistory: item.messages ? JSON.parse(item.messages).map((msg: any) => ({
@@ -107,11 +123,10 @@ export default function HistoryPage() {
           setHistory(converted)
           return
         }
-      } catch (err) {
-        console.error('Failed to load from Supabase:', err)
+      } catch {
+        // Supabase 加载失败，回退到 localStorage
       }
 
-      // 回退到 localStorage
       const stored = localStorage.getItem('cabinet_history')
       if (stored) {
         const parsed = JSON.parse(stored) as HistoryEntry[]
@@ -123,39 +138,17 @@ export default function HistoryPage() {
     loadHistory()
   }, [user, router])
 
-  const formatDate = (isoString: string) => {
-    const date = new Date(isoString)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    
-    if (diff < 60000) {
-      return '刚刚'
-    } else if (diff < 3600000) {
-      return `${Math.floor(diff / 60000)} 分钟前`
-    } else if (diff < 86400000) {
-      return `${Math.floor(diff / 3600000)} 小时前`
-    } else if (diff < 604800000) {
-      return `${Math.floor(diff / 86400000)} 天前`
-    } else {
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    }
-  }
-
   const handleDelete = async (id: string) => {
-    // 尝试从 Supabase 删除
     try {
       await supabase.from('decisions').delete().eq('id', id)
-    } catch (err) {
-      console.error('Failed to delete from Supabase:', err)
+    } catch {
+      // 静默处理删除失败
     }
 
     const updated = history.filter(entry => entry.id !== id)
     setHistory(updated)
     localStorage.setItem('cabinet_history', JSON.stringify(updated))
+    
     if (selectedEntry?.id === id) {
       setSelectedEntry(null)
       setShowDetailModal(false)
