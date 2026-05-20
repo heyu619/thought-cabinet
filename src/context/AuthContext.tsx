@@ -17,17 +17,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    setHydrated(true)
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    }).catch(() => {
-      setLoading(false)
-    })
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        setUser(session?.user ?? null)
+      } catch {
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
@@ -35,10 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe()
   }, [])
-
-  if (!hydrated) {
-    return null
-  }
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {

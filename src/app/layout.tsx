@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Special_Elite, IBM_Plex_Mono, Noto_Serif_SC } from 'next/font/google'
 import './globals.css'
-import Navigation from '@/components/Navigation'
-import { AuthProvider } from '@/context/AuthContext'
+import ClientWrapper from '@/components/ClientWrapper'
 
 const specialElite = Special_Elite({
   weight: '400',
@@ -35,24 +34,19 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className={`${specialElite.variable} ${ibmPlexMono.variable} ${notoSerif.variable}`}>
-        <AuthProvider>
-          <div className="min-h-screen flex flex-col">
-            <Navigation />
-            <main className="flex-1">
-              {children}
-            </main>
-            <footer className="py-6 px-4 border-t border-cabinet-text-secondary/20">
-              <div className="max-w-6xl mx-auto text-center">
-                <p className="font-typewriter text-cabinet-text-secondary text-sm">
-                  "在思想的内阁中，每一个声音都值得被倾听。"
-                </p>
-                <p className="font-mono text-cabinet-text-secondary/50 text-xs mt-2">
-                  © 2026 Ribs Disco System
-                </p>
-              </div>
-            </footer>
+        <ClientWrapper>
+          {children}
+        </ClientWrapper>
+        <footer className="py-6 px-4 border-t border-cabinet-text-secondary/20">
+          <div className="max-w-6xl mx-auto text-center">
+            <p className="font-typewriter text-cabinet-text-secondary text-sm">
+              "在思想的内阁中，每一个声音都值得被倾听。"
+            </p>
+            <p className="font-mono text-cabinet-text-secondary/50 text-xs mt-2">
+              © 2026 Ribs Disco System
+            </p>
           </div>
-        </AuthProvider>
+        </footer>
       </body>
     </html>
   )

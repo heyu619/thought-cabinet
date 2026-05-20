@@ -1,12 +1,18 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Navigation() {
+  const [isClient, setIsClient] = useState(false)
   const pathname = usePathname()
   const { user, logout, loading } = useAuth()
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const navLinks = [
     { href: '/', label: '首页' },
@@ -20,13 +26,33 @@ export default function Navigation() {
     await logout()
   }
 
+  if (!isClient) {
+    return (
+      <nav className="sticky top-0 z-50 bg-black/60 backdrop-blur-md border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center gap-2 group">
+              <span className="text-2xl">🧠</span>
+              <span className="font-typewriter text-xl text-cabinet-accent tracking-wider hidden sm:block group-hover:text-cabinet-text transition-colors">
+                Ribs Disco
+              </span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-cabinet-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+          </div>
+        </div>
+      </nav>
+    )
+  }
+
   if (loading) {
     return (
       <nav className="sticky top-0 z-50 bg-black/60 backdrop-blur-md border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2 group">
-              
+              <span className="text-2xl">🧠</span>
               <span className="font-typewriter text-xl text-cabinet-accent tracking-wider hidden sm:block group-hover:text-cabinet-text transition-colors">
                 Ribs Disco
               </span>
