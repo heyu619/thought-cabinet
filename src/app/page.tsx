@@ -73,8 +73,8 @@ export default function HomePage() {
     <div className="min-h-[calc(100vh-8rem)]">
       <section className="py-12 sm:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="font-typewriter text-3xl sm:text-5xl text-cabinet-accent mb-4">
-            鸡肋迪斯科
+          <h1 className="font-typewriter text-5xl sm:text-7xl lg:text-8xl mb-4 title-gradient">
+            Ribs Disco
           </h1>
           <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-cabinet-accent to-transparent mb-8" />
 
@@ -113,7 +113,7 @@ export default function HomePage() {
                     欢迎回来，<span className="text-cabinet-accent">{user.email}</span>
                   </p>
                   <textarea
-                    className="w-full h-24 bg-black/50 rounded-lg p-4 font-mono text-sm text-cabinet-text resize-none focus:outline-none focus:ring-2 focus:ring-cabinet-accent/50 border border-white/10"
+                    className="w-full h-24 bg-black/50 rounded-lg p-4 font-mono text-sm text-cabinet-text resize-none focus:outline-none focus:ring-2 focus:ring-cabinet-accent/50 border border-white/10 hover:brightness-125 hover:border-cabinet-accent/30 transition-all duration-300"
                     placeholder="输入你的问题或困惑，让思想内阁帮你做出决策..."
                     value={userQuestion}
                     onChange={(e) => setUserQuestion(e.target.value)}

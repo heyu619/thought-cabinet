@@ -6,11 +6,13 @@ import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { 
   YINZI_PROMPT, 
+  YINZI_PROMPT_FINAL, 
   WUSHI_PROMPT, 
   LIZHI_PROMPT, 
   YUWANG_PROMPT, 
   LEZI_PROMPT, 
-  DUOXIANG_PROMPT 
+  DUOXIANG_PROMPT,
+  DUOXIANG_PROMPT_FINAL
 } from '@/lib/prompts'
 
 const ROLE_NAMES: Record<string, string> = {
@@ -68,6 +70,7 @@ function DecisionContent() {
   const [assignments, setAssignments] = useState<Assignment | null>(null)
   const [finalAdvice, setFinalAdvice] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [duoxiangHistory, setDuoxiangHistory] = useState<string[]>([]) // 记录多想鸭舌之前说过的内容
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -326,77 +329,92 @@ function DecisionContent() {
       throw new Error('API返回内容为空');
     }
 
-    const rawContent = data.content;
+    let rawContent = data.content;
+    console.log('fetchJson raw content:', rawContent);
+    
+    // 如果content是对象而不是字符串，直接返回原始对象（保留所有字段）
+    if (typeof rawContent === 'object') {
+      return rawContent;
+    }
+    
+    // 确保是字符串
+    rawContent = String(rawContent);
+    
+    // 移除可能的markdown代码块标记
+    rawContent = rawContent.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
     
     // 方法1：直接尝试JSON解析
     try {
-      return JSON.parse(rawContent);
-    } catch {
-      // JSON解析失败，继续尝试其他方法
+      const parsed = JSON.parse(rawContent);
+      // 如果已经是对象，直接返回（可能是引子入的 {summary, assignments} 或多想鸭舌的 {tags, description}）
+      return parsed;
+    } catch (e) {
+      console.warn('方法1 JSON解析失败:', e);
     }
 
     // 方法2：清理后尝试解析
     const cleanedContent = cleanJsonContent(rawContent);
     try {
-      return JSON.parse(cleanedContent);
-    } catch {
-      // 继续尝试
+      const parsed = JSON.parse(cleanedContent);
+      return parsed;
+    } catch (e) {
+      console.warn('方法2 清理后解析失败:', e);
     }
 
-    // 方法3：使用正则表达式提取response字段
+    // 方法3：使用正则表达式提取JSON对象（处理可能的格式问题）
     try {
-      // 匹配 "response": "..." 或 "response": '...'
-      const responseMatch = rawContent.match(/"response"\s*:\s*["']([\s\S]*?)["'](?=\s*(,|}))/);
-      if (responseMatch) {
-        let responseText = responseMatch[1]
-          // 移除markdown格式
-          .replace(/\*\*/g, '')
-          // 移除转义字符
-          .replace(/\\n/g, '\n')
-          .replace(/\\"/g, '"')
-          .replace(/\\'/g, "'")
-          .trim();
-        
-        // 尝试提取options
-        const optionsMatch = rawContent.match(/"options"\s*:\s*\[([\s\S]*?)\]/);
-        let options = ['好的，我了解你的观点了，下一位'];
-        if (optionsMatch) {
-          const optionsText = optionsMatch[1];
-          const optionMatches = optionsText.match(/"([^"]*)"/g);
-          if (optionMatches) {
-            options = optionMatches.map((o: string) => o.replace(/^"|"$/g, ''));
-          }
-        }
-        
-        return {
-          response: responseText,
-          options
-        };
+      // 尝试匹配完整的JSON对象
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
       }
-    } catch {
-      // 继续尝试
+    } catch (e) {
+      console.error('方法3 正则提取JSON失败:', e);
     }
 
-    // 方法4：最宽松的方式 - 提取所有文本内容
+    // 方法4：尝试提取 response 和 options 字段（处理非标准格式）
     try {
-      // 移除JSON结构，只保留文本内容
-      const textContent = rawContent
-        .replace(/["'\{\}\[\]:,]/g, ' ')
-        .replace(/\*\*/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+      // 提取 response 字段内容
+      const responseMatch = rawContent.match(/(?:["']?response["']?\s*[:：]\s*)(["']?)([\s\S]*?)\1(?=\s*["']?options["']?\s*[:：])/);
+      // 提取 options 字段内容（使用 [\s\S]*? 替代 dotAll 模式）
+      const optionsMatch = rawContent.match(/(?:["']?options["']?\s*[:：]\s*)(\[([\s\S]*?)\])/);
       
-      return {
-        response: textContent,
-        options: ['好的，我了解你的观点了，下一位']
-      };
-    } catch {
-      // 最后的保底
-      return {
-        response: rawContent.replace(/[\{\}\[\]"":,]/g, '').trim(),
-        options: ['好的，我了解你的观点了，下一位']
-      };
+      let responseText = '';
+      let options = ['好的，我了解你的观点了，下一位'];
+      
+      if (responseMatch && responseMatch[2]) {
+        responseText = responseMatch[2].trim();
+      } else {
+        // 如果没有找到 response 字段，尝试提取第一个冒号后的内容
+        const simpleMatch = rawContent.match(/^\s*[^:：]+[:：]\s*(.+)$/m);
+        if (simpleMatch) {
+          responseText = simpleMatch[1].trim();
+        }
+      }
+      
+      if (optionsMatch) {
+        try {
+          options = JSON.parse(optionsMatch[1]);
+        } catch {
+          // 如果解析失败，尝试提取文本
+          const optionTexts = optionsMatch[1].match(/"([^"]+)"/g) || [];
+          options = optionTexts.map((o: string) => o.replace(/^"|"$/g, ''));
+        }
+      }
+      
+      if (responseText) {
+        return { response: responseText, options };
+      }
+    } catch (e) {
+      console.error('方法4 提取字段失败:', e);
     }
+
+    // 方法5：最宽松的方式 - 返回原始内容作为response
+    return {
+      response: rawContent.replace(/[\{\}\[\]"":,]/g, '').trim(),
+      options: ['好的，我了解你的观点了，下一位']
+    };
   };
 
   // 生成情绪标签和多想鸭舌发言
@@ -420,13 +438,33 @@ function DecisionContent() {
         return newMessages;
       });
       
-      // 20%概率让多想鸭舌发言（作为对话消息）
-      if (Math.random() < 0.20 && emotion.description) {
-        setMessages(prev => [...prev, { 
-          role: 'duoxiang', 
-          content: emotion.description
-        }]);
-        setEmotionDescription('');
+      // 35%概率让多想鸭舌发言（作为对话消息）
+      if (Math.random() < 0.35 && emotion.description) {
+        // 检查是否重复
+        const isDuplicate = duoxiangHistory.some(
+          prev => prev === emotion.description || 
+                  emotion.description.includes(prev) || 
+                  prev.includes(emotion.description)
+        );
+        
+        if (!isDuplicate) {
+          setMessages(prev => [...prev, { 
+            role: 'duoxiang', 
+            content: emotion.description
+          }]);
+          setDuoxiangHistory(prev => [...prev, emotion.description]);
+          setEmotionDescription('');
+          
+          // 30%概率让乐子入回应多想鸭舌（怼或共情）
+          if (Math.random() < 0.30) {
+            await leziRespondToDuoxiang(emotion.description);
+          } else {
+            // 如果乐子入没有怼多想鸭舌，触发乐子入怼发言者
+            await triggerLezi();
+          }
+        } else {
+          console.log('多想鸭舌发言重复，跳过');
+        }
       } else {
         setEmotionDescription('');
       }
@@ -435,9 +473,52 @@ function DecisionContent() {
     }
   };
 
+  // 乐子入回应多想鸭舌（50%怼，50%共情）
+  const leziRespondToDuoxiang = async (duoxiangContent: string): Promise<void> => {
+    try {
+      setPhase('lezi');
+      // 50%概率怼，50%概率共情
+      const isRoast = Math.random() < 0.5;
+      const prompt = isRoast 
+        ? `多想鸭舌说："${duoxiangContent}"，请用幽默调侃的方式怼他一下。`
+        : `多想鸭舌说："${duoxiangContent}"，请表达理解和共情，用幽默但温暖的方式回应。`;
+      
+      // 添加乐子入发言（流式）
+      setMessages(prev => [...prev, { role: 'lezi', content: '', isStreaming: true }]);
+      let fullLeziContent = '';
+      
+      await streamChatWithJson(LEZI_PROMPT, prompt, (chunk) => {
+        fullLeziContent += chunk;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMsg = newMessages[newMessages.length - 1];
+          if (lastMsg.role === 'lezi' && lastMsg.isStreaming) {
+            lastMsg.content = fullLeziContent;
+          }
+          return newMessages;
+        });
+      });
+      
+      // 结束流式输出
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMsg = newMessages[newMessages.length - 1];
+        if (lastMsg.role === 'lezi' && lastMsg.isStreaming) {
+          lastMsg.isStreaming = false;
+        }
+        return newMessages;
+      });
+      
+      setPhase('speaking');
+    } catch (error) {
+      console.error('乐子入回应多想鸭舌失败:', error);
+      setPhase('speaking');
+    }
+  };
+
   // 触发乐子入（使用流式输出）
   const triggerLezi = async (): Promise<boolean> => {
-    if (Math.random() > 0.40) return false;
+    if (Math.random() > 0.50) return false;
     if (messages.length === 0) return false;
     
     setPhase('lezi');
@@ -523,38 +604,49 @@ function DecisionContent() {
     const otherSpeakers = allSpeakers.filter(s => s !== currentSpeaker);
     if (otherSpeakers.length === 0) return false;
     
-    // 关键词映射：检测用户选项触发的角色对立
-    const oppositionKeywords: Record<string, string[]> = {
-      wushi: ['现实', '实际', '成本', '风险', '可行', '实用', '生存', '物质'],
-      lizhi: ['逻辑', '理性', '分析', '道理', '长远', '合理', '推理'],
-      yuwang: ['快乐', '享受', '想要', '情感', '感受', '满足', '欲望', '刺激'],
+    // 角色倾向关键词：检测用户选项涉及的倾向
+    const roleKeywords: Record<string, string[]> = {
+      wushi: ['现实', '实际', '成本', '风险', '可行', '实用', '生存', '物质', '现实的', '实际的', '成本的', '风险的'],
+      lizhi: ['逻辑', '理性', '分析', '道理', '长远', '合理', '推理', '逻辑的', '理性的', '分析的', '合理的'],
+      yuwang: ['快乐', '享受', '想要', '情感', '感受', '满足', '欲望', '刺激', '快乐的', '享受的', '情感的', '感性的'],
     };
     
-    // 检测用户选项是否触及相关角色的对立话题
-    let shouldInterrupt = Math.random() < 0.90; // 提高基础概率到90%，让每个环节都更可能有辩驳
-    let triggeredSpeakers: string[] = [];
+    // 角色对立关系映射：key是触发角色，value是对立角色列表
+    const roleOppositions: Record<string, string[]> = {
+      wushi: ['yuwang', 'lizhi'], // 务实肋骨 的对立是 欲望鸡排（现实 vs 欲望）和 理智翅根（现实 vs 理想）
+      lizhi: ['yuwang', 'wushi'], // 理智翅根 的对立是 欲望鸡排（理性 vs 感性）和 务实肋骨（理想 vs 现实）
+      yuwang: ['wushi', 'lizhi'], // 欲望鸡排 的对立是 务实肋骨 和 理智翅根
+    };
     
-    // 检查关键词 - 如果涉及对立话题，增加触发概率并记录相关角色
-    for (const [role, keywords] of Object.entries(oppositionKeywords)) {
-      if (role !== currentSpeaker && keywords.some(k => userChoice.includes(k))) {
-        shouldInterrupt = true;
-        triggeredSpeakers.push(role);
+    // 检测用户选项涉及的倾向
+    let shouldInterrupt = Math.random() < 0.80; // 基础概率80%
+    let triggeredRoles: string[] = [];
+    
+    // 检查关键词 - 找出用户选项涉及的倾向
+    for (const [role, keywords] of Object.entries(roleKeywords)) {
+      if (keywords.some(k => userChoice.includes(k))) {
+        triggeredRoles.push(role);
       }
     }
     
-    if (!shouldInterrupt) return false;
-    
-    // 选择插嘴者：
-    // 1. 如果有关键词触发的角色，优先从这些角色中随机选择
-    // 2. 否则从所有其他角色中完全随机选择
-    let interruptSpeaker: string;
-    if (triggeredSpeakers.length > 0) {
-      // 从被关键词触发的角色中随机选择
-      interruptSpeaker = triggeredSpeakers[Math.floor(Math.random() * triggeredSpeakers.length)];
-    } else {
-      // 完全随机选择其他角色，确保每个角色都有平等的机会
-      interruptSpeaker = otherSpeakers[Math.floor(Math.random() * otherSpeakers.length)];
+    // 根据涉及的倾向，找出对立角色
+    let oppositionSpeakers: string[] = [];
+    if (triggeredRoles.length > 0) {
+      shouldInterrupt = true; // 如果涉及特定倾向，必定触发插嘴
+      // 收集所有对立角色
+      for (const role of triggeredRoles) {
+        const oppositions = roleOppositions[role] || [];
+        oppositionSpeakers = [...new Set([...oppositionSpeakers, ...oppositions])];
+      }
+      // 过滤掉当前发言者（不能自己插嘴自己）
+      oppositionSpeakers = oppositionSpeakers.filter(s => s !== currentSpeaker);
     }
+    
+    if (!shouldInterrupt) return false;
+    if (oppositionSpeakers.length === 0) oppositionSpeakers = otherSpeakers;
+    
+    // 选择插嘴者：从对立角色中随机选择
+    const interruptSpeaker = oppositionSpeakers[Math.floor(Math.random() * oppositionSpeakers.length)];
     setPhase('interrupt');
     
     try {
@@ -669,13 +761,22 @@ function DecisionContent() {
     setSpeakersCompleted([])
     
     try {
+      console.log('Starting meeting with question:', question)
       const introResult = await fetchJson(YINZI_PROMPT, question)
+      console.log('Intro result:', introResult)
+      
+      // fetchJson 现在直接返回原始对象（引子入返回 {summary, assignments}）
+      if (!introResult.summary || !introResult.assignments) {
+        throw new Error('引子入返回数据格式不正确')
+      }
+      
       setMessages([{ role: 'yinzi', content: introResult.summary }])
       setAssignments(introResult.assignments)
       await generateEmotion()
       await startSpeaker('wushi', introResult.assignments.wushi)
-    } catch {
-      alert('会议启动失败，请稍后重试')
+    } catch (error) {
+      console.error('会议启动失败:', error)
+      alert(`会议启动失败: ${error instanceof Error ? error.message : '未知错误'}\n\n请检查控制台获取详细信息`)
     } finally {
       setIsLoading(false)
     }
@@ -833,62 +934,94 @@ function DecisionContent() {
     setPhase('final');
     setCurrentSpeaker(null);
     
-    // 主持人宣布开始总结
-    setMessages(prev => [...prev, { 
-      role: 'yinzi', 
-      content: '所有与会者都已发言完毕。现在我将整合大家的观点，给出最终建议。' 
-    }]);
-    
-    // 使用fetchJson获取总结
+    // 使用流式调用获取总结
     const allMessages = messages.map(m => `${ROLE_NAMES[m.role]}: ${m.content}`).join('\n');
-    const finalPrompt = `请整合以下所有观点，总结务实肋骨的现实考量、理智翅根的逻辑分析、欲望鸡排的情感诉求，指出各方观点的冲突点和共识点，最后给出一份平衡、客观、有说服力的最终建议：\n${allMessages}`;
+    const finalPrompt = `作为思想内阁的主持人引子入，请整合以下所有观点，完成以下任务：
+1. 总结务实肋骨的现实考量
+2. 总结理智翅根的逻辑分析
+3. 总结欲望鸡排的情感诉求
+4. 指出各方观点的冲突点和共识点
+5. 给出一份平衡、客观、有说服力的最终建议
+
+所有观点：
+${allMessages}`;
     
     try {
-      const result = await fetchJson(YINZI_PROMPT, finalPrompt);
-      const summaryContent = result.summary || result.response || '';
-      
       // 添加流式总结消息
       setMessages(prev => [...prev, { role: 'yinzi', content: '', isStreaming: true }]);
-      let displayedSummary = '';
-      const chars = summaryContent.split('');
-      let index = 0;
+      let fullSummary = '';
       
-      await new Promise<void>((resolve) => {
-        const typeInterval = setInterval(() => {
-          if (index < chars.length) {
-            displayedSummary += chars[index];
-            setMessages(prev => {
-              const newMessages = [...prev];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage.role === 'yinzi' && lastMessage.isStreaming) {
-                lastMessage.content = displayedSummary;
-              }
-              return newMessages;
-            });
-            index++;
-          } else {
-            clearInterval(typeInterval);
-            // 结束流式输出
-            setMessages(prev => {
-              const newMessages = [...prev];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage.role === 'yinzi' && lastMessage.isStreaming) {
-                lastMessage.isStreaming = false;
-              }
-              return newMessages;
-            });
-            resolve();
+      await streamChat(YINZI_PROMPT_FINAL, [{ role: 'user', content: finalPrompt }], (chunk) => {
+        fullSummary += chunk;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'yinzi' && lastMessage.isStreaming) {
+            lastMessage.content = fullSummary;
           }
-        }, 30);
+          return newMessages;
+        });
       });
       
-      setFinalAdvice(summaryContent);
+      // 结束流式输出
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage.role === 'yinzi' && lastMessage.isStreaming) {
+          lastMessage.isStreaming = false;
+        }
+        return newMessages;
+      });
+      
+      setFinalAdvice(fullSummary);
+      
+      // 多想鸭舌在会议结束时发言
+      await duoxiangFinalMessage(fullSummary);
     } catch (error) {
       console.error('生成总结失败:', error);
+      setMessages(prev => [...prev, { 
+        role: 'yinzi', 
+        content: '生成总结时出现错误，请稍后重试。' 
+      }]);
       setFinalAdvice('生成总结时出现错误，请稍后重试。');
     }
     
     await generateEmotion();
+  };
+
+  // 多想鸭舌会议结束发言
+  const duoxiangFinalMessage = async (summary: string): Promise<void> => {
+    try {
+      // 添加多想鸭舌发言（流式）
+      setMessages(prev => [...prev, { role: 'duoxiang', content: '', isStreaming: true }]);
+      let fullContent = '';
+      
+      const prompt = `引子入的最终建议：${summary}\n\n请根据整个讨论的氛围和最终建议，引用一句相关的文学名句作为结语。`;
+      
+      await streamChat(DUOXIANG_PROMPT_FINAL, [{ role: 'user', content: prompt }], (chunk) => {
+        fullContent += chunk;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'duoxiang' && lastMessage.isStreaming) {
+            lastMessage.content = fullContent;
+          }
+          return newMessages;
+        });
+      });
+      
+      // 结束流式输出
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage.role === 'duoxiang' && lastMessage.isStreaming) {
+          lastMessage.isStreaming = false;
+        }
+        return newMessages;
+      });
+    } catch (error) {
+      console.error('多想鸭舌结束发言失败:', error);
+    }
   };
 
   // 保存决策记录

@@ -40,6 +40,42 @@ body {
   background-position: center center;
   background-attachment: fixed;
   min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(201, 162, 39, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(232, 168, 124, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(133, 205, 202, 0.04) 0%, transparent 60%);
+  animation: floating-orbs 15s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(201, 162, 39, 0.03) 50%,
+    transparent 100%
+  );
+  animation: light-sweep 8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 
 
@@ -66,6 +102,30 @@ a {
 @keyframes blink-caret {
   from, to { border-color: transparent }
   50% { border-color: var(--cabinet-accent) }
+}
+
+@keyframes floating-orbs {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    opacity: 0.8;
+    transform: translate(3%, -3%) scale(1.05);
+  }
+  66% {
+    opacity: 0.4;
+    transform: translate(-2%, 2%) scale(0.95);
+  }
+}
+
+@keyframes light-sweep {
+  0% {
+    left: -100%;
+  }
+  50%, 100% {
+    left: 100%;
+  }
 }
 
 .paper-texture {
@@ -154,4 +214,233 @@ a {
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+/* 标题渐变流动动画 */
+.title-gradient {
+  background: linear-gradient(90deg, 
+    #c9a227 0%, 
+    #e8a87c 25%, 
+    #85cdca 50%, 
+    #c9a227 75%, 
+    #e8a87c 100%
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 4s ease infinite, breathe 3s ease-in-out infinite;
+  transition: filter 0.3s ease;
+}
+
+.title-gradient:hover {
+  filter: brightness(1.3) drop-shadow(0 0 10px rgba(201, 162, 39, 0.5));
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* 悬浮播放器样式 */
+.floating-player {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.player-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(26, 24, 20, 0.9);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: 50px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.player-mini:hover {
+  background: rgba(26, 24, 20, 0.95);
+  border-color: rgba(201, 162, 39, 0.5);
+  box-shadow: 0 0 20px rgba(201, 162, 39, 0.2);
+}
+
+.play-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cabinet-accent);
+  border: none;
+  border-radius: 50%;
+  color: var(--cabinet-bg);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.play-btn:hover {
+  transform: scale(1.1);
+}
+
+.play-btn svg {
+  width: 14px;
+  height: 14px;
+  margin-left: 1px;
+}
+
+.waveform-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 80px;
+  height: 24px;
+}
+
+.waveform-bar {
+  width: 3px;
+  min-height: 8px;
+  transition: height 0.15s ease;
+}
+
+.player-expanded {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  width: 320px;
+  padding: 1rem;
+  background: rgba(26, 24, 20, 0.95);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.player-expanded.expanded {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.player-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.time-text {
+  font-size: 11px;
+  color: var(--cabinet-text-secondary);
+  font-family: var(--font-ibm-plex-mono), monospace;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--cabinet-accent);
+  border-radius: 3px;
+  transition: width 0.1s ease;
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--cabinet-accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.1s ease;
+  opacity: 0;
+}
+
+.progress-bar:hover .progress-thumb {
+  opacity: 1;
+}
+
+.volume-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volume-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--cabinet-text-secondary);
+}
+
+.volume-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--cabinet-accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--cabinet-accent);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
 }
